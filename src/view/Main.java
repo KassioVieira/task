@@ -6,20 +6,28 @@
 package view;
 
 import dao.TaskJpaController;
+import dao.exceptions.NonexistentEntityException;
 import entidade.Task;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import static javax.swing.JFrame.EXIT_ON_CLOSE;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.table.DefaultTableModel;
 
 /**
  *
@@ -27,9 +35,7 @@ import javax.swing.JTextField;
  */
 public class Main extends JFrame {
 
-    private static JFrame janela;
-    private static JPanel painelPrincipal;
-    private static JFrame frame;
+    private static JFrame frame, frameTable;
     private static JTextField tfTitle;
     private static JTextArea tfDescription;
     private static JTextField tfDateInit;
@@ -43,46 +49,33 @@ public class Main extends JFrame {
     static String dataEnd;
     static String status;
 
+    //Jtable
+    static JPanel painelFundo;
+    static private JPanel painelBotoes;
+    static JTable tabela;
+    static JScrollPane barraRolagem;
+    private static JButton btInserir;
+    private static JButton btExcluir;
+    private static JButton btEditar;
+    private static DefaultTableModel modelo = new DefaultTableModel();
+    static Task taskEdit;
+
     public static void main(String args[]) {
         montarTela();
     }
 
     public static void montarTela() {
-
-        janela = new JFrame("Task");
-        janela.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        painelPrincipal = new JPanel();
-        janela.add(painelPrincipal);
-
-        JButton botaoAdicionar = new JButton("Nova Tarefa");
-        botaoAdicionar.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                addForm();
-            }
-        });
-        painelPrincipal.add(botaoAdicionar);
-
-        JButton botaoTarefas = new JButton("Tarefas");
-        botaoTarefas.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-
-            }
-        });
-        painelPrincipal.add(botaoTarefas);
-
-        janela.pack();
-        janela.setSize(450, 450);
-        janela.setVisible(true);
+        criaJTable();
+        criaJanela();
     }
 
-    private static void addForm() {
+    private static void addForm(long id) {
 
         frame = new JFrame();
         frame.setVisible(true);
         frame.setBounds(100, 100, 500, 489);
         frame.getContentPane().setLayout(null);
+        frame.setLocationRelativeTo(null);
 
         JLabel lblPhone = new JLabel("Titulo:");
         lblPhone.setBounds(65, 68, 100, 20);
@@ -132,6 +125,22 @@ public class Main extends JFrame {
         comboBox.setBounds(150, 280, 100, 20);
         frame.getContentPane().add(comboBox);
 
+        if (id != 0) {
+
+            tfTitle.setText(title);
+            tfDescription.setText(description);
+            tfDateInit.setText(dataInit);
+            tfDateEnd.setText(dataEnd);
+
+            if (status.equals("Fazer")) {
+                comboBox.setSelectedIndex(1);
+            } else if (status.equals("Fazendo")) {
+                comboBox.setSelectedIndex(2);
+            } else {
+                comboBox.setSelectedIndex(3);
+            }
+        }
+
         JButton btnSubmit = new JButton("Salvar");
         btnSubmit.setBackground(Color.GRAY);
         btnSubmit.setForeground(Color.WHITE);
@@ -151,7 +160,17 @@ public class Main extends JFrame {
                     status = "Fazer";
                 }
 
-                salvar();
+                if (id != 0) {
+                    taskEdit.setId(id);
+                    taskEdit.setTitle(title);
+                    taskEdit.setDescription(description);
+                    taskEdit.setDate_init(dataInit);
+                    taskEdit.setDate_end(dataEnd);
+                    taskEdit.setStatus(status);
+                    editar();
+                } else {
+                    salvar();
+                }
             }
         });
     }
@@ -173,6 +192,142 @@ public class Main extends JFrame {
         tfDescription.setText("");
         tfDateInit.setText("");
         tfDateEnd.setText("");
+
+        atualizar(modelo);
+        JOptionPane.showMessageDialog(null, "Salvo com sucesso");
+
+    }
+
+    public static void editar() {
+
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("TaskPU");
+        TaskJpaController controller = new TaskJpaController(emf);
+        
+        try {
+            controller.edit(taskEdit);
+        } catch (Exception ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        atualizar(modelo);
+        frame.dispose();
+        
+    }
+
+    public static void criaJanela() {
+
+        frameTable = new JFrame();
+
+        btInserir = new JButton("Inserir");
+        btExcluir = new JButton("Excluir");
+        btEditar = new JButton("Editar");
+        painelBotoes = new JPanel();
+        barraRolagem = new JScrollPane(tabela);
+        painelFundo = new JPanel();
+        painelFundo.setLayout(new BorderLayout());
+        painelFundo.add(BorderLayout.CENTER, barraRolagem);
+        painelBotoes.add(btInserir);
+        painelBotoes.add(btEditar);
+        painelBotoes.add(btExcluir);
+        painelFundo.add(BorderLayout.SOUTH, painelBotoes);
+
+        frameTable.getContentPane().add(painelFundo);
+        frameTable.setDefaultCloseOperation(EXIT_ON_CLOSE);
+        frameTable.setSize(800, 800);
+        frameTable.setLocationRelativeTo(null);
+        frameTable.setVisible(true);
+
+        btInserir.addActionListener(new BtInserirListener());
+        btEditar.addActionListener(new BtEditarListener());
+        btExcluir.addActionListener(new BtExcluirListener());
+    }
+
+    private static void criaJTable() {
+        tabela = new JTable(modelo);
+        modelo.addColumn("Id");
+        modelo.addColumn("Titulo");
+        modelo.addColumn("Descrição");
+        modelo.addColumn("Início");
+        modelo.addColumn("Fim");
+        modelo.addColumn("Status");
+        tabela.getColumnModel().getColumn(0).setPreferredWidth(10);
+        tabela.getColumnModel().getColumn(1).setPreferredWidth(120);
+        tabela.getColumnModel().getColumn(1).setPreferredWidth(80);
+        tabela.getColumnModel().getColumn(1).setPreferredWidth(120);
+        tabela.getColumnModel().getColumn(1).setPreferredWidth(120);
+        tabela.getColumnModel().getColumn(1).setPreferredWidth(120);
+        atualizar(modelo);
+    }
+
+    public static void atualizar(DefaultTableModel modelo) {
+        modelo.setNumRows(0);
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("TaskPU");
+        TaskJpaController dao = new TaskJpaController(emf);
+
+        for (Task t : dao.findTaskEntities()) {
+            modelo.addRow(new Object[]{t.getId(), t.getTitle(), t.getDescription(), t.getDate_init(), t.getDate_end(), t.getStatus()});
+        }
+    }
+
+    private static class BtInserirListener implements ActionListener {
+
+        @Override
+        public void actionPerformed(java.awt.event.ActionEvent e) {
+            addForm(0);
+        }
+    }
+
+    private static class BtEditarListener implements ActionListener {
+
+        @Override
+        public void actionPerformed(java.awt.event.ActionEvent e) {
+            int linhaSelecionada = -1;
+            linhaSelecionada = tabela.getSelectedRow();
+            if (linhaSelecionada >= 0) {
+
+                long idContato = (long) tabela.getValueAt(linhaSelecionada, 0);
+
+                taskEdit = new Task();
+
+                title = (String) tabela.getValueAt(linhaSelecionada, 1);
+                description = (String) tabela.getValueAt(linhaSelecionada, 2);
+                dataInit = (String) tabela.getValueAt(linhaSelecionada, 3);
+                dataEnd = (String) tabela.getValueAt(linhaSelecionada, 4);
+                status = (String) tabela.getValueAt(linhaSelecionada, 5);
+                addForm(idContato);
+
+                // AtualizarContato ic = new AtualizarContato(modelo, idContato, linhaSelecionada);
+                // ic.setVisible(true);
+            } else {
+                JOptionPane.showMessageDialog(null, "É necesário selecionar uma linha.");
+            }
+        }
+
+    }
+
+    private static class BtExcluirListener implements ActionListener {
+
+        @Override
+        public void actionPerformed(java.awt.event.ActionEvent e) {
+            int linhaSelecionada = -1;
+            linhaSelecionada = tabela.getSelectedRow();
+            if (linhaSelecionada >= 0) {
+                long idContato = (long) tabela.getValueAt(linhaSelecionada, 0);
+                EntityManagerFactory emf = Persistence.createEntityManagerFactory("TaskPU");
+                TaskJpaController dao = new TaskJpaController(emf);
+
+                try {
+                    dao.destroy(idContato);
+                } catch (NonexistentEntityException ex) {
+                    Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+                }
+
+                modelo.removeRow(linhaSelecionada);
+                JOptionPane.showMessageDialog(null, "Removido com sucesso");
+            } else {
+                JOptionPane.showMessageDialog(null, "É necesário selecionar uma linha.");
+            }
+        }
 
     }
 
